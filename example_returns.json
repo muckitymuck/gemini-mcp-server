@@ -1,0 +1,83 @@
+[
+    {
+      "model": "ROG Zephyrus G14 (2025) GA403WR-QS137X",
+      "os": "Windows 11 Pro",
+      "gpu": "NVIDIA® GeForce RTX™ 5070 Ti Laptop GPU",
+      "cpu": "AMD Ryzen™ AI 9 HX 370 Processor",
+      "display": "14\" 3K (2880 x 1800) 16:10 120Hz OLED ROG Nebula Display",
+      "storage": "2TB M.2 NVMe™ PCIe® 4.0 SSD storage"
+    },
+    {
+      "model": "ROG Zephyrus G14 (2025) GA403WR-QS136X",
+      "os": "Windows 11 Pro",
+      "gpu": "NVIDIA® GeForce RTX™ 5070 Ti Laptop GPU",
+      "cpu": "AMD Ryzen™ AI 9 HX 370 Processor",
+      "display": "14\" 3K (2880 x 1800) 16:10 120Hz OLED ROG Nebula Display",
+      "storage": "2TB M.2 NVMe™ PCIe® 4.0 SSD storage"
+    },
+    {
+      "model": "ROG Zephyrus G16 (2025) GU605 GU605CX-XS98-CA",
+      "os": "Windows 11 Pro",
+      "gpu": "NVIDIA® GeForce RTX™ 5090 Laptop GPU",
+      "cpu": "Intel® Core™ Ultra 9 Processor 285H",
+      "display": "16\" 2.5K (2560 x 1600, WQXGA) 16:10 240Hz OLED ROG Nebula Display",
+      "storage": "2TB M.2 NVMe™ PCIe® 4.0 SSD storage"
+    },
+    {
+      "model": "ROG Zephyrus G16 (2025) GU605 GU605CX-QR069X",
+      "os": "Windows 11 Pro",
+      "gpu": "NVIDIA® GeForce RTX™ 5090 Laptop GPU",
+      "cpu": "Intel® Core™ Ultra 9 Processor 285H",
+      "display": "16\" 2.5K (2560 x 1600, WQXGA) 16:10 240Hz OLED ROG Nebula Display",
+      "storage": "2TB M.2 NVMe™ PCIe® 4.0 SSD storage"
+    },
+    {
+      "model": "ROG Zephyrus G16 (2025) GU605 GU605CW-XS98-CA",
+      "os": "Windows 11 Pro",
+      "gpu": "NVIDIA® GeForce RTX™ 5080 Laptop GPU",
+      "cpu": "Intel® Core™ Ultra 9 Processor 285H",
+      "display": "16\" 2.5K (2560 x 1600, WQXGA) 16:10 240Hz OLED ROG Nebula Display",
+      "storage": "2TB M.2 NVMe™ PCIe® 4.0 SSD storage"
+    },
+    {
+      "model": "ROG Zephyrus G16 (2025) GU605 GU605CW-QR089X",
+      "os": "Windows 11 Pro",
+      "gpu": "NVIDIA® GeForce RTX™ 5080 Laptop GPU",
+      "cpu": "Intel® Core™ Ultra 9 Processor 285H",
+      "display": "16\" 2.5K (2560 x 1600, WQXGA) 16:10 240Hz OLED ROG Nebula Display",
+      "storage": "2TB M.2 NVMe™ PCIe® 4.0 SSD storage"
+    },
+    {
+      "model": "ROG Zephyrus G16 (2025) GU605 GU605CR-XS98-CA",
+      "os": "Windows 11 Pro",
+      "gpu": "NVIDIA® GeForce RTX™ 5070 Ti Laptop GPU",
+      "cpu": "Intel® Core™ Ultra 9 Processor 285H",
+      "display": "16\" 2.5K (2560 x 1600, WQXGA) 16:10 240Hz OLED ROG Nebula Display",
+      "storage": "2TB M.2 NVMe™ PCIe® 4.0 SSD storage"
+    },
+    {
+      "model": "ROG Zephyrus G16 (2025) GU605 GU605CR-QR114X",
+      "os": "Windows 11 Pro",
+      "gpu": "NVIDIA® GeForce RTX™ 5070 Ti Laptop GPU",
+      "cpu": "Intel® Core™ Ultra 9 Processor 285H",
+      "display": "16\" 2.5K (2560 x 1600, WQXGA) 16:10 240Hz OLED ROG Nebula Display",
+      "storage": "2TB M.2 NVMe™ PCIe® 4.0 SSD storage"
+    },
+    {
+      "model": "ROG Zephyrus G14 (2025) GA403WP-QS010X",
+      "os": "Windows 11 Pro",
+      "gpu": "NVIDIA® GeForce RTX™ 5070 Laptop GPU",
+      "cpu": "AMD Ryzen™ AI 9 HX 370 Processor",
+      "display": "14\" 3K (2880 x 1800) 16:10 120Hz OLED ROG Nebula Display",
+      "storage": "2TB M.2 NVMe™ PCIe® 4.0 SSD storage"
+    },
+    {
+      "model": "ROG Zephyrus G14 (2025) GA403WP-QS007X",
+      "os": "Windows 11 Pro",
+      "gpu": "NVIDIA® GeForce RTX™ 5070 Laptop GPU",
+      "cpu": "AMD Ryzen™ AI 9 HX 370 Processor",
+      "display": "14\" 3K (2880 x 1800) 16:10 120Hz OLED ROG Nebula Display",
+      "storage": "2TB M.2 NVMe™ PCIe® 4.0 SSD storage"
+    }
+  ]
+  
