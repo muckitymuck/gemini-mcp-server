@@ -1,6 +1,9 @@
 import playwright, { Page, Browser } from 'playwright';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GenerationConfig } from "@google/generative-ai";
 import fs from 'fs'; // Used temporarily if saving screenshots locally for debugging
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 // --- Configuration ---
 // Consider using a newer model if available and suitable (e.g., gemini-1.5-pro-latest)
