@@ -14,11 +14,13 @@
   "description": "",
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
+    "@trigger.dev/sdk": "^3.3.17",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "playwright": "^1.51.1"
   },
   "devDependencies": {
+    "@trigger.dev/build": "^3.3.17",
     "@types/express": "^5.0.1",
     "@types/node": "^22.13.16",
     "nodemon": "^3.1.9",

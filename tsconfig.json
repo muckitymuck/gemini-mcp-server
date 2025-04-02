@@ -10,6 +10,8 @@
       "forceConsistentCasingInFileNames": true,
       "resolveJsonModule": true // Important for AX Tree potentially
     },
-    "include": ["src/**/*"],
+    "include": [
+      "src/**/*"
+    ],
     "exclude": ["node_modules"]
   }
