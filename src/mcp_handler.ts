@@ -27,6 +27,7 @@ const genAI = new GoogleGenerativeAI(API_KEY);
 //     { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
 // ];
 
+
 // Optional: Configure generation settings
 const generationConfig: GenerationConfig = {
     temperature: 0.4, // Adjust creativity/determinism
