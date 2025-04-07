@@ -24,7 +24,7 @@ app.use(express.json({ limit: '10mb' })); // Increase limit if AX tree/screensho
 
 // --- API Endpoint ---
 app.post('/process', (async (req: Request, res: Response) => {
-    const { url, prompt } = req.body;
+    const { url, prompt, navigationOptions } = req.body;
 
     // Basic Input Validation
     if (!url || typeof url !== 'string') {
@@ -36,33 +36,68 @@ app.post('/process', (async (req: Request, res: Response) => {
 
     // Validate URL format (basic)
     try {
-        new URL(url); // Checks if it's a valid URL structure
+        new URL(url);
     } catch (_) {
         return res.status(400).json({ error: 'Invalid URL format provided.' });
     }
 
+    // Validate navigation options if provided
+    if (navigationOptions) {
+        if (typeof navigationOptions !== 'object') {
+            return res.status(400).json({ error: 'Invalid navigation options format.' });
+        }
 
-    console.log(`Received request: URL=${url}, Prompt="${prompt}"`);
+        // Validate clickSelectors
+        if (navigationOptions.clickSelectors && 
+            (!Array.isArray(navigationOptions.clickSelectors) || 
+             !navigationOptions.clickSelectors.every((s: string) => typeof s === 'string'))) {
+            return res.status(400).json({ error: 'Invalid clickSelectors format.' });
+        }
+
+        // Validate formInputs
+        if (navigationOptions.formInputs && 
+            (!Array.isArray(navigationOptions.formInputs) || 
+             !navigationOptions.formInputs.every((input: { selector: string; value: string }) => 
+                typeof input === 'object' && 
+                typeof input.selector === 'string' && 
+                typeof input.value === 'string'))) {
+            return res.status(400).json({ error: 'Invalid formInputs format.' });
+        }
+
+        // Validate waitForSelectors
+        if (navigationOptions.waitForSelectors && 
+            (!Array.isArray(navigationOptions.waitForSelectors) || 
+             !navigationOptions.waitForSelectors.every((s: string) => typeof s === 'string'))) {
+            return res.status(400).json({ error: 'Invalid waitForSelectors format.' });
+        }
+
+        // Validate followLinks
+        if (navigationOptions.followLinks && 
+            (!Array.isArray(navigationOptions.followLinks) || 
+             !navigationOptions.followLinks.every((s: string) => typeof s === 'string'))) {
+            return res.status(400).json({ error: 'Invalid followLinks format.' });
+        }
+    }
+
+    console.log(`Received request: URL=${url}, Prompt="${prompt}", NavigationOptions=${JSON.stringify(navigationOptions)}`);
 
     try {
         const startTime = Date.now();
-        const geminiResponse = await handleMcpRequest(url, prompt);
-        const duration = (Date.now() - startTime) / 1000; // Duration in seconds
+        const geminiResponse = await handleMcpRequest(url, prompt, navigationOptions);
+        const duration = (Date.now() - startTime) / 1000;
 
         console.log(`Successfully processed request in ${duration.toFixed(2)} seconds.`);
         res.status(200).json({ response: geminiResponse });
 
     } catch (error) {
         console.error("API Error:", error);
-        // Send back a generic server error message
         const message = error instanceof Error ? error.message : "An unknown error occurred during processing.";
-         // Determine appropriate status code (e.g., 400 for specific input errors caught in handler, 500 otherwise)
-         let statusCode = 500;
-         if (message.includes("Timeout navigating") || message.includes("Failed to get page content")) {
-             statusCode = 400; // Bad input URL or page issue
-         } else if (message.includes("blocked by Gemini")) {
-             statusCode = 400; // Or potentially 503 Service Unavailable if it's a safety block
-         }
+        let statusCode = 500;
+        if (message.includes("Timeout navigating") || message.includes("Failed to get page content")) {
+            statusCode = 400;
+        } else if (message.includes("blocked by Gemini")) {
+            statusCode = 400;
+        }
         res.status(statusCode).json({ error: message });
     }
 }) as RequestHandler);

@@ -1,7 +1,8 @@
 import playwright, { Page, Browser } from 'playwright';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GenerationConfig } from "@google/generative-ai";
-import fs from 'fs'; // Used temporarily if saving screenshots locally for debugging
+import fs from 'fs';
 import dotenv from 'dotenv';
+import path from 'path';
 
 dotenv.config();
 
@@ -36,99 +37,154 @@ const generationConfig: GenerationConfig = {
     maxOutputTokens: 4096, // Adjust based on expected response size
 };
 
+// --- Helper Function: Save Screenshot ---
+async function saveScreenshot(screenshotBuffer: Buffer, prompt: string): Promise<string> {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const promptHash = Buffer.from(prompt).toString('base64').substring(0, 20);
+    const filename = `screenshot_${timestamp}_${promptHash}.png`;
+    const screenshotsDir = path.join(process.cwd(), 'screenshots');
+    
+    // Create screenshots directory if it doesn't exist
+    if (!fs.existsSync(screenshotsDir)) {
+        fs.mkdirSync(screenshotsDir, { recursive: true });
+    }
+    
+    const filePath = path.join(screenshotsDir, filename);
+    fs.writeFileSync(filePath, screenshotBuffer);
+    console.log(`Screenshot saved to: ${filePath}`);
+    return filePath;
+}
+
 // --- Helper Function: Get Page Content ---
-async function getPageContent(url: string): Promise<{ browser: Browser; page: Page; screenshotBase64: string; axTree: object | null }> {
+async function getPageContent(
+    url: string,
+    navigationOptions?: {
+        clickSelectors?: string[];
+        formInputs?: Array<{ selector: string; value: string }>;
+        scrollToBottom?: boolean;
+        waitForSelectors?: string[];
+        followLinks?: string[];
+    }
+): Promise<{ browser: Browser; page: Page; screenshotBuffer: Buffer; axTree: object | null }> {
     let browser: Browser | null = null;
     try {
         browser = await playwright.chromium.launch({
             // headless: false, // Uncomment for debugging to see the browser
         });
         const context = await browser.newContext({
-            // Set viewport for consistent screenshots
-             viewport: { width: 1280, height: 720 }, // Example viewport
-             // Consider deviceScaleFactor if needed
+            viewport: { width: 1280, height: 720 },
         });
         const page = await context.newPage();
 
         console.log(`Navigating to ${url}...`);
-        await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 }); // Wait until network is idle, increased timeout
+        await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
         console.log("Navigation complete.");
 
+        // Handle additional navigation options
+        if (navigationOptions) {
+            // Click elements if specified
+            if (navigationOptions.clickSelectors) {
+                for (const selector of navigationOptions.clickSelectors) {
+                    console.log(`Clicking element: ${selector}`);
+                    await page.click(selector);
+                    await page.waitForLoadState('networkidle');
+                }
+            }
+
+            // Fill form inputs if specified
+            if (navigationOptions.formInputs) {
+                for (const input of navigationOptions.formInputs) {
+                    console.log(`Filling form input: ${input.selector}`);
+                    await page.fill(input.selector, input.value);
+                }
+            }
+
+            // Scroll to bottom if requested
+            if (navigationOptions.scrollToBottom) {
+                console.log("Scrolling to bottom of page...");
+                await page.evaluate(() => {
+                    window.scrollTo(0, document.body.scrollHeight);
+                });
+                await page.waitForTimeout(1000); // Wait for any lazy-loaded content
+            }
+
+            // Wait for specific elements if specified
+            if (navigationOptions.waitForSelectors) {
+                for (const selector of navigationOptions.waitForSelectors) {
+                    console.log(`Waiting for element: ${selector}`);
+                    await page.waitForSelector(selector, { timeout: 10000 });
+                }
+            }
+
+            // Follow links if specified
+            if (navigationOptions.followLinks) {
+                for (const linkSelector of navigationOptions.followLinks) {
+                    console.log(`Following link: ${linkSelector}`);
+                    await page.click(linkSelector);
+                    await page.waitForLoadState('networkidle');
+                }
+            }
+        }
+
         console.log("Taking screenshot...");
-        // Capture full page screenshot as buffer, then convert to base64
         const screenshotBuffer = await page.screenshot({ fullPage: true, type: 'png' });
-        const screenshotBase64 = screenshotBuffer.toString('base64');
         console.log("Screenshot captured.");
 
-        // --- Optional: Save screenshot locally for debugging ---
-        // try {
-        //     fs.writeFileSync('debug_screenshot.png', screenshotBuffer);
-        //     console.log("Debug screenshot saved to debug_screenshot.png");
-        // } catch (err) {
-        //     console.error("Failed to save debug screenshot:", err);
-        // }
-        // --- End Optional Debug Save ---
-
-
         console.log("Capturing accessibility tree...");
-        // Capture the accessibility tree
-        // Note: The AX tree can be VERY large.
-        const axTree = await page.accessibility.snapshot({
-             // interestingOnly: false, // Set to true to potentially reduce size, but might miss context
-             // root: await page.locator('body').elementHandle() ?? undefined // Limit to body to reduce size? Test needed.
-        });
+        const axTree = await page.accessibility.snapshot();
         console.log("Accessibility tree captured.");
 
-         // --- Optional: Save AX Tree locally for debugging ---
-        // try {
-        //     fs.writeFileSync('debug_axtree.json', JSON.stringify(axTree, null, 2));
-        //     console.log("Debug AX tree saved to debug_axtree.json");
-        // } catch (err) {
-        //     console.error("Failed to save debug AX tree:", err);
-        // }
-        // --- End Optional Debug Save ---
-
-
-        // Return browser and page along with content so they can be closed later
-        return { browser, page, screenshotBase64, axTree };
+        return { browser, page, screenshotBuffer, axTree };
 
     } catch (error) {
         console.error("Error during Playwright operation:", error);
         if (browser) {
-            await browser.close(); // Attempt cleanup on error
+            await browser.close();
         }
-        // Re-throw a more specific error
-         if (error instanceof playwright.errors.TimeoutError) {
-             throw new Error(`Timeout navigating to or processing ${url}. The page might be too slow or unresponsive.`);
-         }
+        if (error instanceof playwright.errors.TimeoutError) {
+            throw new Error(`Timeout navigating to or processing ${url}. The page might be too slow or unresponsive.`);
+        }
         throw new Error(`Failed to get page content for ${url}: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 
 // --- Main Handler Function ---
-export async function handleMcpRequest(url: string, userPrompt: string): Promise<string> {
+export async function handleMcpRequest(
+    url: string, 
+    userPrompt: string,
+    navigationOptions?: {
+        clickSelectors?: string[];
+        formInputs?: Array<{ selector: string; value: string }>;
+        scrollToBottom?: boolean;
+        waitForSelectors?: string[];
+        followLinks?: string[];
+    }
+): Promise<string> {
     let browser: Browser | null = null;
 
     try {
-        // 1. Use Playwright to get page content
+        // 1. Use Playwright to get page content with navigation options
         const {
-            browser: pageBrowser, // Renamed to avoid conflict
+            browser: pageBrowser,
             page,
-            screenshotBase64,
+            screenshotBuffer,
             axTree
-        } = await getPageContent(url);
-        browser = pageBrowser; // Assign to outer scope variable for finally block
+        } = await getPageContent(url, navigationOptions);
+        browser = pageBrowser;
+
+        // Save the screenshot with prompt information
+        await saveScreenshot(screenshotBuffer, userPrompt);
+
+        // Convert screenshot to base64 for Gemini
+        const screenshotBase64 = screenshotBuffer.toString('base64');
 
         if (!axTree) {
-             console.warn("Accessibility tree could not be captured.");
-             // Decide if you want to proceed without it or throw an error
-             // throw new Error("Failed to capture accessibility tree.");
+            console.warn("Accessibility tree could not be captured.");
         }
 
         // 2. Prepare the prompt for Gemini Vision model
         const model = genAI.getGenerativeModel({
             model: GEMINI_MODEL_NAME,
-            // safetySettings,
             generationConfig,
         });
 
