@@ -36,33 +36,30 @@ app.post('/process', (async (req: Request, res: Response) => {
 
     // Validate URL format (basic)
     try {
-        new URL(url); // Checks if it's a valid URL structure
+        new URL(url);
     } catch (_) {
         return res.status(400).json({ error: 'Invalid URL format provided.' });
     }
-
 
     console.log(`Received request: URL=${url}, Prompt="${prompt}"`);
 
     try {
         const startTime = Date.now();
         const geminiResponse = await handleMcpRequest(url, prompt);
-        const duration = (Date.now() - startTime) / 1000; // Duration in seconds
+        const duration = (Date.now() - startTime) / 1000;
 
         console.log(`Successfully processed request in ${duration.toFixed(2)} seconds.`);
         res.status(200).json({ response: geminiResponse });
 
     } catch (error) {
         console.error("API Error:", error);
-        // Send back a generic server error message
         const message = error instanceof Error ? error.message : "An unknown error occurred during processing.";
-         // Determine appropriate status code (e.g., 400 for specific input errors caught in handler, 500 otherwise)
-         let statusCode = 500;
-         if (message.includes("Timeout navigating") || message.includes("Failed to get page content")) {
-             statusCode = 400; // Bad input URL or page issue
-         } else if (message.includes("blocked by Gemini")) {
-             statusCode = 400; // Or potentially 503 Service Unavailable if it's a safety block
-         }
+        let statusCode = 500;
+        if (message.includes("Timeout navigating") || message.includes("Failed to get page content")) {
+            statusCode = 400;
+        } else if (message.includes("blocked by Gemini")) {
+            statusCode = 400;
+        }
         res.status(statusCode).json({ error: message });
     }
 }) as RequestHandler);
