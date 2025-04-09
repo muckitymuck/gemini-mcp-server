@@ -24,7 +24,7 @@ app.use(express.json({ limit: '10mb' })); // Increase limit if AX tree/screensho
 
 // --- API Endpoint ---
 app.post('/process', (async (req: Request, res: Response) => {
-    const { url, prompt, navigationOptions } = req.body;
+    const { url, prompt } = req.body;
 
     // Basic Input Validation
     if (!url || typeof url !== 'string') {
@@ -41,49 +41,11 @@ app.post('/process', (async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'Invalid URL format provided.' });
     }
 
-    // Validate navigation options if provided
-    if (navigationOptions) {
-        if (typeof navigationOptions !== 'object') {
-            return res.status(400).json({ error: 'Invalid navigation options format.' });
-        }
-
-        // Validate clickSelectors
-        if (navigationOptions.clickSelectors && 
-            (!Array.isArray(navigationOptions.clickSelectors) || 
-             !navigationOptions.clickSelectors.every((s: string) => typeof s === 'string'))) {
-            return res.status(400).json({ error: 'Invalid clickSelectors format.' });
-        }
-
-        // Validate formInputs
-        if (navigationOptions.formInputs && 
-            (!Array.isArray(navigationOptions.formInputs) || 
-             !navigationOptions.formInputs.every((input: { selector: string; value: string }) => 
-                typeof input === 'object' && 
-                typeof input.selector === 'string' && 
-                typeof input.value === 'string'))) {
-            return res.status(400).json({ error: 'Invalid formInputs format.' });
-        }
-
-        // Validate waitForSelectors
-        if (navigationOptions.waitForSelectors && 
-            (!Array.isArray(navigationOptions.waitForSelectors) || 
-             !navigationOptions.waitForSelectors.every((s: string) => typeof s === 'string'))) {
-            return res.status(400).json({ error: 'Invalid waitForSelectors format.' });
-        }
-
-        // Validate followLinks
-        if (navigationOptions.followLinks && 
-            (!Array.isArray(navigationOptions.followLinks) || 
-             !navigationOptions.followLinks.every((s: string) => typeof s === 'string'))) {
-            return res.status(400).json({ error: 'Invalid followLinks format.' });
-        }
-    }
-
-    console.log(`Received request: URL=${url}, Prompt="${prompt}", NavigationOptions=${JSON.stringify(navigationOptions)}`);
+    console.log(`Received request: URL=${url}, Prompt="${prompt}"`);
 
     try {
         const startTime = Date.now();
-        const geminiResponse = await handleMcpRequest(url, prompt, navigationOptions);
+        const geminiResponse = await handleMcpRequest(url, prompt);
         const duration = (Date.now() - startTime) / 1000;
 
         console.log(`Successfully processed request in ${duration.toFixed(2)} seconds.`);
