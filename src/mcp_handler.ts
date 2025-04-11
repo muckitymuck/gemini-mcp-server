@@ -3,6 +3,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GenerationConfig 
 import fs from 'fs';
 import dotenv from 'dotenv';
 import path from 'path';
+import { saveScreenshotWithRecord } from './supabase_handler';
 
 dotenv.config();
 
@@ -72,8 +73,11 @@ async function getPageContent(
             text?: string;
         }>;
     }
-): Promise<{ browser: Browser; page: Page; screenshotBuffer: Buffer; axTree: object | null }> {
+): Promise<{ browser: Browser; page: Page; screenshotBuffer: Buffer; axTree: object | null; navigationScreenshots: Array<{ url: string; path: string; publicUrl: string }> }> {
     let browser: Browser | null = null;
+    const navigationScreenshots: Array<{ url: string; path: string; publicUrl: string }> = [];
+    let lastUrl = '';
+
     try {
         browser = await playwright.chromium.launch({
             // headless: false, // Uncomment for debugging to see the browser
@@ -92,6 +96,12 @@ async function getPageContent(
             timeout: 60000 
         });
         console.log("Navigation complete.");
+
+        // Take initial screenshot
+        const initialScreenshotBuffer = await page.screenshot({ fullPage: true, type: 'png' });
+        const initialScreenshotPath = await saveScreenshot(initialScreenshotBuffer, `Initial page load - ${url}`);
+        console.log(`Initial screenshot saved to: ${initialScreenshotPath}`);
+        lastUrl = url;
 
         // Handle navigation steps if specified
         if (navigationOptions?.navigationSteps) {
@@ -162,6 +172,17 @@ async function getPageContent(
                             break;
                     }
                     console.log(`Successfully executed step: ${step.type}`);
+
+                    // Check if URL has changed after navigation
+                    const currentUrl = page.url();
+                    if (currentUrl !== lastUrl) {
+                        console.log(`URL changed to: ${currentUrl}`);
+                        const stepScreenshotBuffer = await page.screenshot({ fullPage: true, type: 'png' });
+                        const stepScreenshotPath = await saveScreenshot(stepScreenshotBuffer, `Navigation - ${currentUrl}`);
+                        console.log(`Navigation screenshot saved to: ${stepScreenshotPath}`);
+                        lastUrl = currentUrl;
+                    }
+
                 } catch (error) {
                     console.warn(`Failed to execute step ${step.type}:`, error);
                 }
@@ -266,15 +287,19 @@ async function getPageContent(
             }
         }
 
-        console.log("Taking screenshot...");
-        const screenshotBuffer = await page.screenshot({ fullPage: true, type: 'png' });
-        console.log("Screenshot captured.");
+        // Take final screenshot if URL has changed
+        const finalUrl = page.url();
+        if (finalUrl !== lastUrl) {
+            const finalScreenshotBuffer = await page.screenshot({ fullPage: true, type: 'png' });
+            const finalScreenshotPath = await saveScreenshot(finalScreenshotBuffer, `Final page - ${finalUrl}`);
+            console.log(`Final screenshot saved to: ${finalScreenshotPath}`);
+        }
 
         console.log("Capturing accessibility tree...");
         const axTree = await page.accessibility.snapshot();
         console.log("Accessibility tree captured.");
 
-        return { browser, page, screenshotBuffer, axTree };
+        return { browser, page, screenshotBuffer: await page.screenshot({ fullPage: true, type: 'png' }), axTree, navigationScreenshots };
 
     } catch (error) {
         console.error("Error during Playwright operation:", error);
@@ -400,14 +425,19 @@ export async function handleMcpRequest(url: string, userPrompt: string): Promise
             browser: pageBrowser,
             page,
             screenshotBuffer,
-            axTree
+            axTree,
+            navigationScreenshots
         } = await getPageContent(url, navigationOptions);
         browser = pageBrowser;
 
-        // Save the screenshot with prompt information
-        await saveScreenshot(screenshotBuffer, userPrompt);
+        // Log all captured screenshots
+        console.log("Navigation screenshots captured:");
+        navigationScreenshots.forEach((screenshot, index) => {
+            console.log(`Step ${index + 1}: ${screenshot.url}`);
+            console.log(`  Screenshot URL: ${screenshot.publicUrl}`);
+        });
 
-        // Convert screenshot to base64 for Gemini
+        // Convert final screenshot to base64 for Gemini
         const screenshotBase64 = screenshotBuffer.toString('base64');
 
         if (!axTree) {
