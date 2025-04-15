@@ -3,7 +3,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GenerationConfig 
 import fs from 'fs';
 import dotenv from 'dotenv';
 import path from 'path';
-import { saveScreenshotWithRecord } from './supabase_handler';
+import { saveScreenshotWithRecord, uploadScreenshot, getScreenshotUrl } from './supabase_handler';
 
 dotenv.config();
 
@@ -41,21 +41,44 @@ const generationConfig: GenerationConfig = {
 };
 
 // --- Helper Function: Save Screenshot ---
-async function saveScreenshot(screenshotBuffer: Buffer, prompt: string): Promise<string> {
+async function saveScreenshot(screenshotBuffer: Buffer, prompt: string, url?: string): Promise<string> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const promptHash = Buffer.from(prompt).toString('base64').substring(0, 20);
-    const filename = `screenshot_${timestamp}_${promptHash}.png`;
-    const screenshotsDir = path.join(process.cwd(), 'screenshots');
     
-    // Create screenshots directory if it doesn't exist
-    if (!fs.existsSync(screenshotsDir)) {
-        fs.mkdirSync(screenshotsDir, { recursive: true });
+    // Extract domain from URL if provided
+    let domain = '';
+    if (url) {
+        try {
+            const urlObj = new URL(url);
+            domain = urlObj.hostname.replace(/[^a-zA-Z0-9]/g, '-');
+            domain = `_${domain}`;
+        } catch (error) {
+            console.warn('Could not parse URL for domain extraction:', error);
+        }
     }
     
-    const filePath = path.join(screenshotsDir, filename);
-    fs.writeFileSync(filePath, screenshotBuffer);
-    console.log(`Screenshot saved to: ${filePath}`);
-    return filePath;
+    const filename = `screenshot_${timestamp}${domain}_${promptHash}.png`;
+
+    try {
+        // Try to upload to Supabase first
+        const storagePath = await uploadScreenshot(filename, screenshotBuffer);
+        const publicUrl = await getScreenshotUrl(storagePath);
+        console.log(`Screenshot uploaded to Supabase: ${publicUrl}`);
+        return publicUrl;
+    } catch (error) {
+        console.warn('Failed to upload to Supabase, saving locally:', error);
+        
+        // Fall back to local storage
+        const screenshotsDir = path.join(process.cwd(), 'screenshots');
+        if (!fs.existsSync(screenshotsDir)) {
+            fs.mkdirSync(screenshotsDir, { recursive: true });
+        }
+        
+        const filePath = path.join(screenshotsDir, filename);
+        fs.writeFileSync(filePath, screenshotBuffer);
+        console.log(`Screenshot saved locally to: ${filePath}`);
+        return filePath;
+    }
 }
 
 // --- Helper Function: Get Page Content ---
@@ -99,9 +122,42 @@ async function getPageContent(
         });
         console.log("Navigation complete.");
 
+        // Handle initial popups and expand content
+        try {
+            // Handle cookie popup if present
+            try {
+                await page.waitForSelector('button:text("Accept all")', { timeout: 5000 });
+                await page.click('button:text("Accept all")');
+                console.log('Accepted cookies');
+            } catch (error) {
+                console.log('No cookie acceptance button found or already accepted');
+            }
+
+            // Handle localization popup if present
+            try {
+                await page.waitForSelector('button:text("Stay here")', { timeout: 5000 });
+                await page.click('button:text("Stay here")');
+                console.log('Clicked Stay here on localization popup');
+            } catch (error) {
+                console.log('No localization popup found');
+            }
+
+            // Click SEE ALL link if present
+            try {
+                await page.waitForSelector('a:text("SEE ALL")', { timeout: 5000 });
+                await page.click('a:text("SEE ALL")');
+                await page.waitForLoadState('networkidle');
+                console.log('Expanded content by clicking SEE ALL');
+            } catch (error) {
+                console.log('No SEE ALL link found');
+            }
+        } catch (error) {
+            console.warn('Error handling popups:', error);
+        }
+
         // Take initial screenshot
         const initialScreenshotBuffer = await page.screenshot({ fullPage: true, type: 'png' });
-        const initialScreenshotPath = await saveScreenshot(initialScreenshotBuffer, `Initial page load - ${url}`);
+        const initialScreenshotPath = await saveScreenshot(initialScreenshotBuffer, `Initial page load - ${url}`, url);
         console.log(`Initial screenshot saved to: ${initialScreenshotPath}`);
         lastUrl = url;
 
@@ -160,15 +216,70 @@ async function getPageContent(
                         case 'search':
                             if (step.selector && step.value) {
                                 try {
-                                    await page.waitForSelector(step.selector, { 
-                                        state: 'visible',
-                                        timeout: 5000 
-                                    });
-                                    await page.fill(step.selector, step.value);
-                                    await page.keyboard.press('Enter');
-                                    await page.waitForLoadState('networkidle', { timeout: 10000 });
+                                    // First try to find and click the search button
+                                    const searchButtonSelectors = [
+                                        'button[aria-label*="search"]',
+                                        'button[aria-label*="Search"]',
+                                        'svg[alt="search"]',
+                                        'svg[alt="Search"]',
+                                        'button svg[alt="search"]',
+                                        'button svg[alt="Search"]'
+                                    ];
+                                    
+                                    let searchButtonFound = false;
+                                    for (const buttonSelector of searchButtonSelectors) {
+                                        try {
+                                            await page.waitForSelector(buttonSelector, { 
+                                                state: 'visible',
+                                                timeout: 5000 
+                                            });
+                                            await page.click(buttonSelector);
+                                            await page.waitForTimeout(1000); // Wait for search input to appear
+                                            searchButtonFound = true;
+                                            console.log(`Found and clicked search button using selector: ${buttonSelector}`);
+                                            break;
+                                        } catch (error) {
+                                            console.log(`Search button selector ${buttonSelector} not found, trying next...`);
+                                        }
+                                    }
+                                    
+                                    if (!searchButtonFound) {
+                                        console.warn('Could not find search button on the page');
+                                        break;
+                                    }
+
+                                    // Now try to find the search input
+                                    const searchInputSelectors = [
+                                        'input[type="search"]',
+                                        'input[name="search"]',
+                                        'input#search',
+                                        'input[aria-label*="Search"]',
+                                        'input[aria-label*="search"]'
+                                    ];
+                                    
+                                    let searchInputFound = false;
+                                    for (const searchSelector of searchInputSelectors) {
+                                        try {
+                                            await page.waitForSelector(searchSelector, { 
+                                                state: 'visible',
+                                                timeout: 5000 
+                                            });
+                                            await page.fill(searchSelector, step.value);
+                                            await page.keyboard.press('Enter');
+                                            await page.waitForLoadState('networkidle', { timeout: 10000 });
+                                            searchInputFound = true;
+                                            console.log(`Found search input using selector: ${searchSelector}`);
+                                            break;
+                                        } catch (error) {
+                                            console.log(`Search input selector ${searchSelector} not found, trying next...`);
+                                        }
+                                    }
+                                    
+                                    if (!searchInputFound) {
+                                        console.warn('Could not find search input after clicking search button');
+                                    }
                                 } catch (error) {
-                                    console.warn(`Could not find search input ${step.selector}, skipping search`);
+                                    console.warn(`Failed to perform search: ${error}`);
                                 }
                             }
                             break;
@@ -180,7 +291,7 @@ async function getPageContent(
                     if (currentUrl !== lastUrl) {
                         console.log(`URL changed to: ${currentUrl}`);
                         const stepScreenshotBuffer = await page.screenshot({ fullPage: true, type: 'png' });
-                        const stepScreenshotPath = await saveScreenshot(stepScreenshotBuffer, `Navigation - ${currentUrl}`);
+                        const stepScreenshotPath = await saveScreenshot(stepScreenshotBuffer, `Navigation - ${currentUrl}`, currentUrl);
                         console.log(`Navigation screenshot saved to: ${stepScreenshotPath}`);
                         lastUrl = currentUrl;
                     }
@@ -293,7 +404,7 @@ async function getPageContent(
         const finalUrl = page.url();
         if (finalUrl !== lastUrl) {
             const finalScreenshotBuffer = await page.screenshot({ fullPage: true, type: 'png' });
-            const finalScreenshotPath = await saveScreenshot(finalScreenshotBuffer, `Final page - ${finalUrl}`);
+            const finalScreenshotPath = await saveScreenshot(finalScreenshotBuffer, `Final page - ${finalUrl}`, finalUrl);
             console.log(`Final screenshot saved to: ${finalScreenshotPath}`);
         }
 
