@@ -49,7 +49,10 @@ app.post('/process', (async (req: Request, res: Response) => {
         const duration = (Date.now() - startTime) / 1000;
 
         console.log(`Successfully processed request in ${duration.toFixed(2)} seconds.`);
-        res.status(200).json({ response: geminiResponse });
+        res.status(200).json({ 
+            response: geminiResponse,
+            message: "Screenshot and metadata have been saved in the data/screenshots directory"
+        });
 
     } catch (error) {
         console.error("API Error:", error);
