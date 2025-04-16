@@ -3,15 +3,19 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Initialize Supabase client
+// Initialize Supabase clients
 const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-if (!supabaseUrl || !supabaseKey) {
+if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error('Missing Supabase credentials. Please set SUPABASE_URL and SUPABASE_ANON_KEY in your .env file');
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Create both anonymous and service role clients
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // Types for our data
 export interface ScreenshotRecord {
@@ -24,7 +28,7 @@ export interface ScreenshotRecord {
 
 // Table operations
 export async function insertScreenshotRecord(record: ScreenshotRecord): Promise<ScreenshotRecord> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from('screenshots')
         .insert([record])
         .select()
@@ -54,7 +58,7 @@ export async function getScreenshotRecord(id: number): Promise<ScreenshotRecord 
 // Storage operations
 export async function uploadScreenshot(filePath: string, fileBuffer: Buffer): Promise<string> {
     const fileName = filePath.split('/').pop() || 'screenshot.png';
-    const { data, error } = await supabase.storage
+    const { data, error } = await supabaseAdmin.storage
         .from('screenshots')
         .upload(fileName, fileBuffer, {
             contentType: 'image/png',
