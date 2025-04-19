@@ -438,7 +438,7 @@ async function analyzeNavigationNeeds(prompt: string): Promise<{
         selector?: string;
         duration?: number;
         value?: string;
-        text?: string; // For text-based selectors
+        text?: string;
     }>;
 }> {
     const model = genAI.getGenerativeModel({
