@@ -24,6 +24,8 @@ export interface ScreenshotRecord {
     prompt: string;
     screenshot_path: string;
     created_at?: string;
+    tags?: string[];
+    metadata?: Record<string, any>;
 }
 
 // Table operations
@@ -55,6 +57,46 @@ export async function getScreenshotRecord(id: number): Promise<ScreenshotRecord 
     return data;
 }
 
+// Search operations
+export async function getScreenshotsByTag(tag: string): Promise<ScreenshotRecord[]> {
+    const { data, error } = await supabase
+        .from('screenshots')
+        .select('*')
+        .contains('tags', [tag]);
+
+    if (error) {
+        throw new Error(`Failed to get screenshots by tag: ${error.message}`);
+    }
+
+    return data || [];
+}
+
+export async function getScreenshotsByTags(tags: string[]): Promise<ScreenshotRecord[]> {
+    const { data, error } = await supabase
+        .from('screenshots')
+        .select('*')
+        .contains('tags', tags);
+
+    if (error) {
+        throw new Error(`Failed to get screenshots by tags: ${error.message}`);
+    }
+
+    return data || [];
+}
+
+export async function getScreenshotsByMetadata(key: string, value: any): Promise<ScreenshotRecord[]> {
+    const { data, error } = await supabase
+        .from('screenshots')
+        .select('*')
+        .contains('metadata', { [key]: value });
+
+    if (error) {
+        throw new Error(`Failed to get screenshots by metadata: ${error.message}`);
+    }
+
+    return data || [];
+}
+
 // Storage operations
 export async function uploadScreenshot(filePath: string, fileBuffer: Buffer): Promise<string> {
     const fileName = filePath.split('/').pop() || 'screenshot.png';
@@ -84,7 +126,9 @@ export async function getScreenshotUrl(filePath: string): Promise<string> {
 export async function saveScreenshotWithRecord(
     fileBuffer: Buffer,
     url: string,
-    prompt: string
+    prompt: string,
+    tags?: string[],
+    metadata?: Record<string, any>
 ): Promise<{ record: ScreenshotRecord; publicUrl: string }> {
     // First upload the screenshot
     const fileName = `screenshot_${Date.now()}.png`;
@@ -94,7 +138,9 @@ export async function saveScreenshotWithRecord(
     const record = await insertScreenshotRecord({
         url,
         prompt,
-        screenshot_path: storagePath
+        screenshot_path: storagePath,
+        tags,
+        metadata
     });
 
     // Get the public URL

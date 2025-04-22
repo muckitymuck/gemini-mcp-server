@@ -1,6 +1,13 @@
 import express, { Request, Response, RequestHandler } from 'express';
 import dotenv from 'dotenv';
 import { handleMcpRequest } from './mcp_handler'; // Import the handler
+import { 
+    getScreenshotRecord, 
+    getScreenshotUrl, 
+    getScreenshotsByTag, 
+    getScreenshotsByMetadata,
+    ScreenshotRecord
+} from './supabase_handler';
 
 console.log('Starting server initialization...');
 console.log('Current working directory:', process.cwd());
@@ -67,11 +74,102 @@ app.post('/process', (async (req: Request, res: Response) => {
     }
 }) as RequestHandler);
 
-// --- Health Check Endpoint (Optional) ---
- app.get('/health', (req: Request, res: Response) => {
-    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
- });
+// --- Screenshot Endpoints ---
+// Get screenshot URL by ID
+app.get('/screenshots/:id', (async (req: Request, res: Response) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) {
+            return res.status(400).json({ error: 'Invalid ID format' });
+        }
+        
+        const screenshot = await getScreenshotRecord(id);
+        
+        if (!screenshot) {
+            return res.status(404).json({ error: `Screenshot with ID ${id} not found` });
+        }
+        
+        const url = await getScreenshotUrl(screenshot.screenshot_path);
+        
+        res.status(200).json({ 
+            id: screenshot.id,
+            url: screenshot.url,
+            prompt: screenshot.prompt,
+            created_at: screenshot.created_at,
+            tags: screenshot.tags || [],
+            metadata: screenshot.metadata || {},
+            download_url: url
+        });
+    } catch (error) {
+        console.error("Error retrieving screenshot:", error);
+        const message = error instanceof Error ? error.message : "An unknown error occurred";
+        res.status(500).json({ error: message });
+    }
+}) as RequestHandler);
 
+// Get screenshots with filters
+app.get('/screenshots', (async (req: Request, res: Response) => {
+    try {
+        const { tag, key, value } = req.query;
+        
+        let screenshots = [];
+        
+        // Filter by tag
+        if (tag && typeof tag === 'string') {
+            screenshots = await getScreenshotsByTag(tag);
+        }
+        // Filter by metadata
+        else if (key && value && typeof key === 'string' && typeof value === 'string') {
+            // Try to parse value as JSON if it seems to be a complex type
+            let parsedValue = value;
+            if ((value.startsWith('{') && value.endsWith('}')) || 
+                (value.startsWith('[') && value.endsWith(']'))) {
+                try {
+                    parsedValue = JSON.parse(value);
+                } catch (e) {
+                    // Use the original string value if parsing fails
+                }
+            }
+            screenshots = await getScreenshotsByMetadata(key, parsedValue);
+        }
+        // No valid filters
+        else {
+            return res.status(400).json({ 
+                error: 'Invalid query parameters. Use "tag" or "key" and "value" parameters'
+            });
+        }
+        
+        // Get download URLs for all screenshots
+        const results = await Promise.all(
+            screenshots.map(async (screenshot: ScreenshotRecord) => {
+                const downloadUrl = await getScreenshotUrl(screenshot.screenshot_path);
+                return {
+                    id: screenshot.id,
+                    url: screenshot.url,
+                    prompt: screenshot.prompt,
+                    created_at: screenshot.created_at,
+                    tags: screenshot.tags || [],
+                    metadata: screenshot.metadata || {},
+                    download_url: downloadUrl
+                };
+            })
+        );
+        
+        res.status(200).json({ 
+            count: results.length,
+            screenshots: results
+        });
+    } catch (error) {
+        console.error("Error retrieving screenshots:", error);
+        const message = error instanceof Error ? error.message : "An unknown error occurred";
+        res.status(500).json({ error: message });
+    }
+}) as RequestHandler);
+
+// --- Health Check Endpoint (Optional) ---
+app.get('/health', (req: Request, res: Response) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // --- Start Server ---
 app.listen(port, () => {
