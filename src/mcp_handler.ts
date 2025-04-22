@@ -41,7 +41,13 @@ const generationConfig: GenerationConfig = {
 };
 
 // --- Helper Function: Save Screenshot ---
-async function saveScreenshot(screenshotBuffer: Buffer, prompt: string, url?: string): Promise<string> {
+async function saveScreenshot(
+    screenshotBuffer: Buffer, 
+    prompt: string, 
+    url?: string, 
+    tags?: string[],
+    metadata?: Record<string, any>
+): Promise<string> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const promptHash = Buffer.from(prompt).toString('base64').substring(0, 20);
     
@@ -61,6 +67,24 @@ async function saveScreenshot(screenshotBuffer: Buffer, prompt: string, url?: st
 
     try {
         // Try to upload to Supabase first
+        // If URL is provided, try to use saveScreenshotWithRecord to save record with tags and metadata
+        if (url) {
+            try {
+                const { publicUrl } = await saveScreenshotWithRecord(
+                    screenshotBuffer,
+                    url,
+                    prompt,
+                    tags,
+                    metadata
+                );
+                console.log(`Screenshot saved to Supabase with metadata: ${publicUrl}`);
+                return publicUrl;
+            } catch (error) {
+                console.warn('Failed to save screenshot with record, falling back to direct upload:', error);
+            }
+        }
+        
+        // Fallback to direct upload if not using record or if record save failed
         const storagePath = await uploadScreenshot(filename, screenshotBuffer);
         const publicUrl = await getScreenshotUrl(storagePath);
         console.log(`Screenshot uploaded to Supabase: ${publicUrl}`);
@@ -157,7 +181,13 @@ async function getPageContent(
 
         // Take initial screenshot
         const initialScreenshotBuffer = await page.screenshot({ fullPage: true, type: 'png' });
-        const initialScreenshotPath = await saveScreenshot(initialScreenshotBuffer, `Initial page load - ${url}`, url);
+        const initialScreenshotPath = await saveScreenshot(
+            initialScreenshotBuffer, 
+            `Initial page load - ${url}`, 
+            url,
+            ['initial_load', 'page_entry'],
+            { pageState: 'initial', pageTitle: await page.title() }
+        );
         console.log(`Initial screenshot saved to: ${initialScreenshotPath}`);
         lastUrl = url;
 
@@ -291,7 +321,17 @@ async function getPageContent(
                     if (currentUrl !== lastUrl) {
                         console.log(`URL changed to: ${currentUrl}`);
                         const stepScreenshotBuffer = await page.screenshot({ fullPage: true, type: 'png' });
-                        const stepScreenshotPath = await saveScreenshot(stepScreenshotBuffer, `Navigation - ${currentUrl}`, currentUrl);
+                        const stepScreenshotPath = await saveScreenshot(
+                            stepScreenshotBuffer, 
+                            `Navigation - ${currentUrl}`, 
+                            currentUrl,
+                            ['navigation_step', 'interaction'],
+                            { 
+                                stepType: step.type, 
+                                stepDetails: JSON.stringify(step),
+                                pageTitle: await page.title() 
+                            }
+                        );
                         console.log(`Navigation screenshot saved to: ${stepScreenshotPath}`);
                         lastUrl = currentUrl;
                     }
@@ -404,7 +444,13 @@ async function getPageContent(
         const finalUrl = page.url();
         if (finalUrl !== lastUrl) {
             const finalScreenshotBuffer = await page.screenshot({ fullPage: true, type: 'png' });
-            const finalScreenshotPath = await saveScreenshot(finalScreenshotBuffer, `Final page - ${finalUrl}`, finalUrl);
+            const finalScreenshotPath = await saveScreenshot(
+                finalScreenshotBuffer, 
+                `Final page - ${finalUrl}`, 
+                finalUrl,
+                ['final_state', 'page_result'],
+                { pageState: 'final', pageTitle: await page.title() }
+            );
             console.log(`Final screenshot saved to: ${finalScreenshotPath}`);
         }
 
