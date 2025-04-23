@@ -7,6 +7,13 @@ import { saveScreenshotWithRecord, uploadScreenshot, getScreenshotUrl } from './
 
 dotenv.config();
 
+// Ensure screenshots directory exists
+const screenshotsDir = path.join(process.cwd(), 'screenshots');
+if (!fs.existsSync(screenshotsDir)) {
+    console.log('Creating screenshots directory...');
+    fs.mkdirSync(screenshotsDir, { recursive: true });
+}
+
 // --- Configuration ---
 // Consider using a newer model if available and suitable (e.g., gemini-1.5-pro-latest)
 // gemini-pro-vision is older but stable for vision tasks.
@@ -85,15 +92,19 @@ async function saveScreenshot(
         }
         
         // Fallback to direct upload if not using record or if record save failed
-        const storagePath = await uploadScreenshot(filename, screenshotBuffer);
-        const publicUrl = await getScreenshotUrl(storagePath);
-        console.log(`Screenshot uploaded to Supabase: ${publicUrl}`);
-        return publicUrl;
+        try {
+            const storagePath = await uploadScreenshot(filename, screenshotBuffer);
+            const publicUrl = await getScreenshotUrl(storagePath);
+            console.log(`Screenshot uploaded to Supabase: ${publicUrl}`);
+            return publicUrl;
+        } catch (error) {
+            console.warn('Failed to upload directly to Supabase storage:', error);
+            throw error; // Re-throw to trigger local storage fallback
+        }
     } catch (error) {
         console.warn('Failed to upload to Supabase, saving locally:', error);
         
         // Fall back to local storage
-        const screenshotsDir = path.join(process.cwd(), 'screenshots');
         if (!fs.existsSync(screenshotsDir)) {
             fs.mkdirSync(screenshotsDir, { recursive: true });
         }
@@ -101,6 +112,18 @@ async function saveScreenshot(
         const filePath = path.join(screenshotsDir, filename);
         fs.writeFileSync(filePath, screenshotBuffer);
         console.log(`Screenshot saved locally to: ${filePath}`);
+        
+        // Generate a fallback URL using the known Supabase URL format
+        const supabaseUrl = process.env.SUPABASE_URL;
+        if (supabaseUrl) {
+            // Extract the project ID from the Supabase URL
+            const projectId = supabaseUrl.split('https://')[1].split('.supabase.co')[0];
+            const fallbackUrl = `https://${projectId}.supabase.co/storage/v1/object/public/screenshots/${filename}`;
+            console.log(`Generated fallback URL: ${fallbackUrl}`);
+            return fallbackUrl;
+        }
+        
+        // If we can't generate a fallback URL, return the local file path
         return filePath;
     }
 }
@@ -599,6 +622,16 @@ export async function handleMcpRequest(url: string, userPrompt: string): Promise
         // Convert final screenshot to base64 for Gemini
         const screenshotBase64 = screenshotBuffer.toString('base64');
 
+        // Save the final screenshot
+        const finalScreenshotUrl = await saveScreenshot(
+            screenshotBuffer, 
+            `Final analysis - ${url}`, 
+            url,
+            ['final_analysis'],
+            { pageState: 'analysis', pageTitle: await page.title() }
+        );
+        console.log(`Final analysis screenshot saved to: ${finalScreenshotUrl}`);
+
         if (!axTree) {
             console.warn("Accessibility tree could not be captured.");
         }
@@ -650,6 +683,27 @@ export async function handleMcpRequest(url: string, userPrompt: string): Promise
         if (!responseText) {
             console.warn("Gemini response text is empty. Full response:", JSON.stringify(result.response, null, 2));
             return "(Gemini returned an empty response)";
+        }
+
+        // Collect screenshot URLs - both from navigationScreenshots and the final screenshot
+        const screenshotUrls = navigationScreenshots.map(screenshot => screenshot.publicUrl);
+        
+        // Add the final screenshot URL if it exists
+        if (finalScreenshotUrl) {
+            screenshotUrls.push(finalScreenshotUrl);
+        }
+        
+        // Only add screenshot section if we have screenshots
+        if (screenshotUrls.length > 0) {
+            // Format screenshot URLs to add to the response
+            let screenshotUrlsSection = "\n\n### Screenshots:\n";
+            
+            screenshotUrls.forEach((url, index) => {
+                screenshotUrlsSection += `\n${index + 1}. [Download Screenshot](${url})`;
+            });
+            
+            // Add screenshot URLs to the response
+            return responseText + screenshotUrlsSection;
         }
 
         return responseText;
