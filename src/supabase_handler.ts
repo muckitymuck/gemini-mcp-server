@@ -17,6 +17,63 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+// Ensure the screenshots bucket exists and has proper settings
+async function ensureScreenshotsBucket() {
+    try {
+        // Try to get bucket info to check if it exists
+        const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets();
+        
+        if (listError) {
+            console.error('Error checking bucket existence:', listError);
+            return false;
+        }
+        
+        // Check if screenshots bucket exists
+        const screenshotsBucket = buckets.find(bucket => bucket.name === 'screenshots');
+        
+        // If bucket doesn't exist, create it
+        if (!screenshotsBucket) {
+            console.log('Creating screenshots bucket...');
+            const { error: createError } = await supabaseAdmin.storage.createBucket('screenshots', {
+                public: true, // Make files publicly accessible
+                fileSizeLimit: 5242880, // 5MB limit
+            });
+            
+            if (createError) {
+                console.error('Error creating screenshots bucket:', createError);
+                return false;
+            }
+            
+            console.log('Screenshots bucket created successfully.');
+        } else {
+            console.log('Screenshots bucket already exists.');
+            
+            // Make sure bucket is public if it already exists
+            const { error: updateError } = await supabaseAdmin.storage.updateBucket('screenshots', {
+                public: true,
+            });
+            
+            if (updateError) {
+                console.error('Error updating bucket settings:', updateError);
+            }
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error ensuring screenshots bucket exists:', error);
+        return false;
+    }
+}
+
+// Run bucket check at startup
+ensureScreenshotsBucket().then(success => {
+    if (success) {
+        console.log('Supabase storage is ready for screenshots.');
+    } else {
+        console.warn('Failed to set up Supabase storage for screenshots. Will use local fallback.');
+    }
+});
+
 // Types for our data
 export interface ScreenshotRecord {
     id?: number;
