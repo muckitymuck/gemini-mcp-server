@@ -602,6 +602,7 @@ export async function handleMcpRequest(url: string, userPrompt: string): Promise
         const navigationOptions = await analyzeNavigationNeeds(userPrompt);
         console.log("Determined navigation options:", navigationOptions);
 
+        
         // 1. Use Playwright to get page content with determined navigation options
         const {
             browser: pageBrowser,
